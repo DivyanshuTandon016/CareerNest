@@ -157,6 +157,16 @@ function cleanerLocation(value) {
     .trim();
 }
 
+function cleanJobUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 function detectJobDetails() {
   const selectors = selectorsForCurrentSite();
   const generic = siteSelectors.generic;
@@ -167,7 +177,7 @@ function detectJobDetails() {
     location: cleanerLocation(
       visibleTextFrom([...selectors.location, ...generic.location]),
     ),
-    url: window.location.href,
+    url: cleanJobUrl(window.location.href),
     sourceSite: window.location.hostname.replace(/^www\./, ""),
   };
 }
@@ -381,7 +391,7 @@ async function autoSaveConfirmedApplication() {
     if (!response?.ok) {
       showNotice({
         tone: "error",
-        message: response?.error || "Open the extension to save this job manually.",
+        message: response?.error || "CareerNest could not read this job page.",
       });
       return;
     }
@@ -393,7 +403,7 @@ async function autoSaveConfirmedApplication() {
   } catch {
     showNotice({
       tone: "error",
-      message: "Start the CareerNest backend, then save this job manually.",
+      message: "Start the CareerNest backend before applying.",
     });
   }
 }
@@ -413,6 +423,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 document.addEventListener("click", trackApplyClick, true);
 document.addEventListener("submit", () => void rememberApplyIntent(), true);
+
+if (hasJobDetails(detectJobDetails())) {
+  void rememberApplyIntent();
+}
 
 const confirmationObserver = new MutationObserver(scheduleConfirmationScan);
 confirmationObserver.observe(document.documentElement, {

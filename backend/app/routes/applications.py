@@ -23,6 +23,28 @@ def get_application_or_404(application_id: int, session: Session) -> Application
     return application
 
 
+def normalized_url(value: str) -> str:
+    return value.rstrip("/")
+
+
+def matching_application(
+    payload: ApplicationCreate, session: Session
+) -> Application | None:
+    applications = session.exec(select(Application)).all()
+
+    for application in applications:
+        same_job_url = normalized_url(application.job_url) == normalized_url(payload.job_url)
+        same_role = (
+            application.company.casefold() == payload.company.casefold()
+            and application.role_title.casefold() == payload.role_title.casefold()
+        )
+
+        if same_job_url or same_role:
+            return application
+
+    return None
+
+
 @router.get("", response_model=list[ApplicationRead])
 def list_applications(session: Session = Depends(get_session)) -> list[Application]:
     statement = select(Application).order_by(Application.updated_at.desc(), Application.id.desc())
@@ -67,6 +89,18 @@ def get_application(
 def create_application(
     payload: ApplicationCreate, session: Session = Depends(get_session)
 ) -> Application:
+    existing_application = matching_application(payload, session)
+    if existing_application is not None:
+        for field, value in payload.model_dump().items():
+            if value is not None:
+                setattr(existing_application, field, value)
+
+        existing_application.updated_at = utc_now()
+        session.add(existing_application)
+        session.commit()
+        session.refresh(existing_application)
+        return existing_application
+
     application = Application.model_validate(payload)
     session.add(application)
     session.commit()
@@ -101,4 +135,3 @@ def delete_application(
     session.delete(application)
     session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

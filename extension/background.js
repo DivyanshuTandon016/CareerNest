@@ -57,6 +57,16 @@ function sourceFromUrl(value) {
   }
 }
 
+function cleanJobUrl(value) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return trimValue(value);
+  }
+}
+
 function fingerprintFor(details) {
   return [
     normalizedKey(details.company),
@@ -76,7 +86,7 @@ function applicationPayload(details) {
     company: trimValue(details.company),
     role_title: trimValue(details.title),
     location: trimValue(details.location) || null,
-    job_url: trimValue(details.url),
+    job_url: cleanJobUrl(details.url),
     source_site: trimValue(details.sourceSite) || sourceFromUrl(details.url) || null,
     status: "Applied",
     date_applied: localDateValue(),
@@ -232,19 +242,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({
           ok: false,
           error: error instanceof Error ? error.message : "Could not remove application.",
-        }),
-      );
-
-    return true;
-  }
-
-  if (message?.type === "CAREERNEST_SAVE_APPLICATION") {
-    saveApplication(message.payload)
-      .then((application) => sendResponse({ ok: true, application }))
-      .catch((error) =>
-        sendResponse({
-          ok: false,
-          error: error instanceof Error ? error.message : "Could not save application.",
         }),
       );
 

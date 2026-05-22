@@ -6,7 +6,7 @@ CareerNest is a full-stack job application tracking MVP with:
 
 - A React dashboard for reviewing, filtering, adding, editing, and deleting applications.
 - A FastAPI REST API backed by SQLite for local development.
-- A Manifest V3 Chrome extension that detects visible job page details, auto-tracks many confirmed submissions, and keeps a manual save fallback.
+- A Manifest V3 Chrome extension that detects visible job page details and auto-tracks many confirmed submissions.
 
 ## Project structure
 
@@ -84,10 +84,9 @@ VITE_API_BASE_URL=http://localhost:8000
 3. Enable **Developer mode**.
 4. Choose **Load unpacked** and select the `extension` folder.
 5. Apply on a job page. When the extension sees a clear submission confirmation, it saves the job with status `Applied` and shows an Undo notice.
-6. If a site cannot be detected automatically, click the CareerNest extension button, review or edit the detected fields, then click **Save Application**.
-7. Refresh the dashboard and confirm the saved job appears.
+6. Refresh the dashboard and confirm the saved job appears in the history with its applied date.
 
-The extension reads visible job page text through a content script and sends data to the local API through its Manifest V3 service worker. It does not submit applications, collect passwords, or read cookies. Automatic tracking depends on visible confirmation text such as a submitted or received application message, so sites with unusual flows may still need the manual save button.
+The extension reads visible job page text through a content script and sends data to the local API through its Manifest V3 service worker. It does not submit applications, collect passwords, or read cookies. Automatic tracking depends on readable job details and visible confirmation text such as a submitted or received application message.
 
 ## Automatic tracking test
 
@@ -96,14 +95,6 @@ The extension reads visible job page text through a content script and sends dat
 3. Apply on a supported job flow and wait for a visible success message such as an application submitted or received confirmation.
 4. Confirm the CareerNest notice appears on the page.
 5. Refresh the dashboard and confirm the new row is marked `Applied`.
-
-## Manual save test
-
-1. Open any page with a job role heading, company text, and location text, or use a real LinkedIn, Greenhouse, Lever, Workday, or Indeed posting.
-2. Open the extension popup.
-3. Fill any missing role, company, location, URL, or notes fields manually.
-4. Click **Save Application**.
-5. Open the dashboard and filter by company or status `Saved`.
 
 ## API example
 

@@ -1,5 +1,4 @@
 import {
-  BriefcaseBusiness,
   Building2,
   CalendarDays,
   CirclePlus,
@@ -27,6 +26,7 @@ import {
   type ApplicationStats,
   type ApplicationStatus,
 } from "./types";
+import careerNestDarkLogo from "./assets/careernest-dark-logo.svg";
 
 type FormState = {
   company: string;
@@ -129,7 +129,7 @@ function formatDate(value: string | null): string {
   }
 
   return new Intl.DateTimeFormat("en-US", {
-    month: "short",
+    month: "long",
     day: "numeric",
     year: "numeric",
   }).format(new Date(`${value}T12:00:00`));
@@ -513,14 +513,13 @@ export default function App() {
       <div className="mx-auto grid min-h-screen max-w-[1600px] lg:grid-cols-[250px_1fr]">
         <aside className="border-b border-zinc-200 bg-white px-5 py-5 lg:border-b-0 lg:border-r lg:px-6 lg:py-8">
           <div className="flex items-center justify-between gap-4 lg:block">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-emerald-700 text-white shadow-panel">
-                <BriefcaseBusiness size={22} />
-              </span>
-              <div>
-                <p className="text-xl font-semibold text-zinc-950">CareerNest</p>
-                <p className="text-sm text-zinc-500">Career clarity</p>
-              </div>
+            <div className="w-[min(210px,58vw)]">
+              <img
+                alt="CareerNest"
+                className="block h-auto w-full rounded-lg shadow-panel"
+                src={careerNestDarkLogo}
+              />
+              <p className="mt-2 px-1 text-sm text-zinc-500">Career clarity</p>
             </div>
             <button
               className="inline-flex items-center gap-2 rounded-md bg-zinc-950 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-800 lg:mt-8 lg:w-full lg:justify-center"
@@ -556,10 +555,10 @@ export default function App() {
             <div>
               <p className="text-sm font-semibold text-emerald-700">Dashboard</p>
               <h1 className="mt-2 text-3xl font-semibold text-zinc-950">
-                Applications
+                Job Application History
               </h1>
               <p className="mt-2 text-zinc-600">
-                {stats.applications_this_week} saved this week
+                {stats.applications_this_week} applied this week
               </p>
             </div>
             <div className="grid gap-3 sm:grid-cols-[minmax(260px,1fr)_170px_190px]">
@@ -648,7 +647,9 @@ export default function App() {
           <section className="mt-6 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-panel">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 px-5 py-4">
               <div>
-                <h2 className="text-lg font-semibold text-zinc-950">Application log</h2>
+                <h2 className="text-lg font-semibold text-zinc-950">
+                  Application history
+                </h2>
                 <p className="text-sm text-zinc-500">
                   {visibleApplications.length} visible
                 </p>
