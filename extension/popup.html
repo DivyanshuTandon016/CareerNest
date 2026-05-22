@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>CareerNest</title>
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="brand">
+        <img src="icons/careernest.svg" alt="" />
+        <div>
+          <h1>CareerNest</h1>
+          <p>Save application</p>
+        </div>
+      </header>
+
+      <form id="application-form">
+        <label>
+          Current page URL
+          <input id="job-url" name="jobUrl" required type="url" />
+        </label>
+        <label>
+          Detected job title
+          <input id="role-title" name="roleTitle" required />
+        </label>
+        <label>
+          Detected company
+          <input id="company" name="company" required />
+        </label>
+        <label>
+          Location
+          <input id="location" name="location" />
+        </label>
+        <label>
+          Notes
+          <textarea id="notes" name="notes" rows="3"></textarea>
+        </label>
+        <button id="save-button" type="submit">Save Application</button>
+      </form>
+
+      <p class="status" id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
+
