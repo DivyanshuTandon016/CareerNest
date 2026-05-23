@@ -10,25 +10,28 @@ const apiStatus = document.querySelector("#api-status");
 
 let currentTabId = null;
 let currentTab = null;
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const API_BASE_URL_KEY = "apiBaseUrl";
 
 function cleanApiBaseUrl(value) {
   const trimmed = typeof value === "string" ? value.trim() : "";
-  return (trimmed || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+  return trimmed.replace(/\/+$/, "");
 }
 
 async function loadApiUrl() {
   const stored = await chrome.storage.sync.get(API_BASE_URL_KEY);
   apiUrlInput.value = cleanApiBaseUrl(stored[API_BASE_URL_KEY]);
-  apiStatus.textContent = "This is where the extension saves captured applications.";
+  apiStatus.textContent = apiUrlInput.value
+    ? "CareerNest will save through this API."
+    : "Free mode: saving to Chrome extension storage.";
 }
 
 async function saveApiUrl() {
   const apiBaseUrl = cleanApiBaseUrl(apiUrlInput.value);
   apiUrlInput.value = apiBaseUrl;
   await chrome.storage.sync.set({ [API_BASE_URL_KEY]: apiBaseUrl });
-  apiStatus.textContent = "Saved. CareerNest will use this API URL.";
+  apiStatus.textContent = apiBaseUrl
+    ? "Saved. CareerNest will use this API URL."
+    : "Saved. CareerNest will use free Chrome storage.";
 }
 
 function readableFromSlug(value) {

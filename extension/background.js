@@ -1,5 +1,5 @@
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
 const API_BASE_URL_KEY = "apiBaseUrl";
+const APPLICATIONS_KEY = "applications";
 const AUTO_SAVE_WINDOW_MS = 30 * 60 * 1000;
 const DEDUPE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const RECENT_JOB_DETAILS_WINDOW_MS = 4 * 60 * 60 * 1000;
@@ -9,7 +9,7 @@ const AUTO_SAVE_FINGERPRINTS_KEY = "autoSaveFingerprints";
 
 function cleanApiBaseUrl(value) {
   const trimmed = typeof value === "string" ? value.trim() : "";
-  return (trimmed || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+  return trimmed.replace(/\/+$/, "");
 }
 
 async function apiBaseUrl() {
@@ -19,7 +19,131 @@ async function apiBaseUrl() {
 
 async function apiFetch(path, init) {
   const baseUrl = await apiBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
   return fetch(`${baseUrl}${path}`, init);
+}
+
+async function storedApplications() {
+  const stored = await chrome.storage.local.get(APPLICATIONS_KEY);
+  return Array.isArray(stored[APPLICATIONS_KEY]) ? stored[APPLICATIONS_KEY] : [];
+}
+
+async function setStoredApplications(applications) {
+  await chrome.storage.local.set({ [APPLICATIONS_KEY]: applications });
+}
+
+function normalizedUrl(value) {
+  const cleaned = trimValue(value).replace(/\/+$/, "");
+  if (cleaned.includes("joinhandshake.")) {
+    const parts = cleaned.split("?")[0].split("/");
+    const index = parts.findIndex((part) => part === "job-search" || part === "jobs");
+    if (index >= 0 && index + 1 < parts.length) {
+      return [...parts.slice(0, index), "jobs", parts[index + 1]].join("/");
+    }
+  }
+
+  return cleaned;
+}
+
+function matchingApplication(payload, applications) {
+  return applications.find((application) => {
+    const sameJobUrl = normalizedUrl(application.job_url) === normalizedUrl(payload.job_url);
+    const sameRole =
+      normalizedKey(application.company) === normalizedKey(payload.company) &&
+      normalizedKey(application.role_title) === normalizedKey(payload.role_title);
+
+    return sameJobUrl || sameRole;
+  });
+}
+
+function statsForApplications(applications) {
+  const today = new Date();
+  const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60_000);
+  const day = localToday.getDay();
+  const weekStart = new Date(localToday);
+  weekStart.setDate(localToday.getDate() - ((day + 6) % 7));
+  const weekStartValue = weekStart.toISOString().slice(0, 10);
+  const companies = new Set(
+    applications.map((application) => normalizedKey(application.company)).filter(Boolean),
+  );
+  const sourceSites = new Set(
+    applications.map((application) => normalizedKey(application.source_site)).filter(Boolean),
+  );
+  const appliedDates = applications
+    .map((application) => application.date_applied)
+    .filter(Boolean)
+    .sort();
+
+  return {
+    total_applications: applications.length,
+    applications_this_week: applications.filter(
+      (application) => application.date_applied && application.date_applied >= weekStartValue,
+    ).length,
+    unique_companies: companies.size,
+    source_sites: sourceSites.size,
+    latest_application: appliedDates.at(-1) || null,
+  };
+}
+
+async function listStoredApplications() {
+  const applications = await storedApplications();
+  return applications.sort((left, right) => {
+    const updatedComparison = right.updated_at.localeCompare(left.updated_at);
+    return updatedComparison || right.id - left.id;
+  });
+}
+
+async function saveStoredApplication(payload) {
+  const applications = await storedApplications();
+  const now = new Date().toISOString();
+  const existingApplication = matchingApplication(payload, applications);
+
+  if (existingApplication) {
+    Object.assign(existingApplication, payload, { updated_at: now });
+    await setStoredApplications(applications);
+    return existingApplication;
+  }
+
+  const nextId =
+    applications.reduce((maximum, application) => Math.max(maximum, application.id || 0), 0) + 1;
+  const application = {
+    id: nextId,
+    ...payload,
+    deadline: payload.deadline ?? null,
+    resume_version: payload.resume_version ?? null,
+    created_at: now,
+    updated_at: now,
+  };
+  applications.push(application);
+  await setStoredApplications(applications);
+  return application;
+}
+
+async function updateStoredApplication(applicationId, payload) {
+  const applications = await storedApplications();
+  const application = applications.find((item) => item.id === applicationId);
+
+  if (!application) {
+    throw new Error("Application not found");
+  }
+
+  Object.assign(application, payload, { updated_at: new Date().toISOString() });
+  await setStoredApplications(applications);
+  return application;
+}
+
+async function deleteStoredApplication(applicationId) {
+  const applications = await storedApplications();
+  const nextApplications = applications.filter((application) => application.id !== applicationId);
+
+  if (applications.length === nextApplications.length) {
+    throw new Error("Application not found");
+  }
+
+  await setStoredApplications(nextApplications);
 }
 
 async function saveApplication(payload) {
@@ -30,6 +154,10 @@ async function saveApplication(payload) {
     },
     body: JSON.stringify(payload),
   });
+
+  if (!response) {
+    return saveStoredApplication(payload);
+  }
 
   if (!response.ok) {
     const detail = await response.text();
@@ -43,6 +171,11 @@ async function deleteApplication(applicationId) {
   const response = await apiFetch(`/applications/${applicationId}`, {
     method: "DELETE",
   });
+
+  if (!response) {
+    await deleteStoredApplication(applicationId);
+    return;
+  }
 
   if (!response.ok) {
     const detail = await response.text();
@@ -406,6 +539,58 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse({
           ok: false,
           error: error instanceof Error ? error.message : "Could not remove application.",
+        }),
+      );
+
+    return true;
+  }
+
+  if (message?.type === "CAREERNEST_LIST_APPLICATIONS") {
+    listStoredApplications()
+      .then((applications) => sendResponse({ ok: true, applications }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not load applications.",
+        }),
+      );
+
+    return true;
+  }
+
+  if (message?.type === "CAREERNEST_APPLICATION_STATS") {
+    listStoredApplications()
+      .then((applications) => sendResponse({ ok: true, stats: statsForApplications(applications) }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not load application stats.",
+        }),
+      );
+
+    return true;
+  }
+
+  if (message?.type === "CAREERNEST_CREATE_APPLICATION") {
+    saveStoredApplication(message.payload)
+      .then((application) => sendResponse({ ok: true, application }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not save application.",
+        }),
+      );
+
+    return true;
+  }
+
+  if (message?.type === "CAREERNEST_UPDATE_APPLICATION") {
+    updateStoredApplication(message.applicationId, message.payload)
+      .then((application) => sendResponse({ ok: true, application }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not update application.",
         }),
       );
 

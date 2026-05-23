@@ -116,9 +116,62 @@ const noticeId = "careernest-auto-save-notice";
 let confirmationScanTimer = null;
 let autoSaveAttempted = false;
 
+const dashboardMessageSource = "CAREERNEST_DASHBOARD";
+const extensionMessageSource = "CAREERNEST_EXTENSION";
+const dashboardMessageTypes = new Set([
+  "CAREERNEST_LIST_APPLICATIONS",
+  "CAREERNEST_APPLICATION_STATS",
+  "CAREERNEST_CREATE_APPLICATION",
+  "CAREERNEST_UPDATE_APPLICATION",
+  "CAREERNEST_DELETE_APPLICATION",
+]);
+
 function normalizeText(value) {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
+
+window.addEventListener("message", (event) => {
+  if (
+    event.source !== window ||
+    event.data?.source !== dashboardMessageSource ||
+    !dashboardMessageTypes.has(event.data?.type)
+  ) {
+    return;
+  }
+
+  chrome.runtime
+    .sendMessage({
+      type: event.data.type,
+      applicationId: event.data.applicationId,
+      payload: event.data.payload,
+    })
+    .then((response) => {
+      window.postMessage(
+        {
+          source: extensionMessageSource,
+          requestId: event.data.requestId,
+          response,
+        },
+        window.location.origin,
+      );
+    })
+    .catch((error) => {
+      window.postMessage(
+        {
+          source: extensionMessageSource,
+          requestId: event.data.requestId,
+          response: {
+            ok: false,
+            error:
+              error instanceof Error
+                ? error.message
+                : "CareerNest extension is not available.",
+          },
+        },
+        window.location.origin,
+      );
+    });
+});
 
 function isVisible(element) {
   const style = window.getComputedStyle(element);
@@ -728,7 +781,7 @@ async function autoSaveConfirmedApplication({ force = false } = {}) {
   } catch {
     const response = {
       ok: false,
-      error: "Check the CareerNest API URL in the extension popup.",
+      error: "Open the CareerNest extension popup and leave API URL blank for free storage.",
       ...status,
     };
     showNotice({
