@@ -4,9 +4,32 @@ const pageDetails = document.querySelector("#page-details");
 const detailTitle = document.querySelector("#detail-title");
 const detailCompany = document.querySelector("#detail-company");
 const detailConfirmation = document.querySelector("#detail-confirmation");
+const apiUrlInput = document.querySelector("#api-url");
+const saveApiUrlButton = document.querySelector("#save-api-url");
+const apiStatus = document.querySelector("#api-status");
 
 let currentTabId = null;
 let currentTab = null;
+const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL_KEY = "apiBaseUrl";
+
+function cleanApiBaseUrl(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return (trimmed || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+}
+
+async function loadApiUrl() {
+  const stored = await chrome.storage.sync.get(API_BASE_URL_KEY);
+  apiUrlInput.value = cleanApiBaseUrl(stored[API_BASE_URL_KEY]);
+  apiStatus.textContent = "This is where the extension saves captured applications.";
+}
+
+async function saveApiUrl() {
+  const apiBaseUrl = cleanApiBaseUrl(apiUrlInput.value);
+  apiUrlInput.value = apiBaseUrl;
+  await chrome.storage.sync.set({ [API_BASE_URL_KEY]: apiBaseUrl });
+  apiStatus.textContent = "Saved. CareerNest will use this API URL.";
+}
 
 function readableFromSlug(value) {
   return value
@@ -180,4 +203,11 @@ checkPageButton.addEventListener("click", async () => {
   }
 });
 
+saveApiUrlButton.addEventListener("click", () => {
+  saveApiUrl().catch(() => {
+    apiStatus.textContent = "Could not save this API URL.";
+  });
+});
+
+void loadApiUrl();
 void describeActivePage();

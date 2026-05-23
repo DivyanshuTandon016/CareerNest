@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:8000";
+const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL_KEY = "apiBaseUrl";
 const AUTO_SAVE_WINDOW_MS = 30 * 60 * 1000;
 const DEDUPE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const RECENT_JOB_DETAILS_WINDOW_MS = 4 * 60 * 60 * 1000;
@@ -6,8 +7,23 @@ const RECENT_INTENTS_KEY = "recentApplyIntents";
 const RECENT_JOB_DETAILS_KEY = "recentJobDetails";
 const AUTO_SAVE_FINGERPRINTS_KEY = "autoSaveFingerprints";
 
+function cleanApiBaseUrl(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return (trimmed || DEFAULT_API_BASE_URL).replace(/\/+$/, "");
+}
+
+async function apiBaseUrl() {
+  const stored = await chrome.storage.sync.get(API_BASE_URL_KEY);
+  return cleanApiBaseUrl(stored[API_BASE_URL_KEY]);
+}
+
+async function apiFetch(path, init) {
+  const baseUrl = await apiBaseUrl();
+  return fetch(`${baseUrl}${path}`, init);
+}
+
 async function saveApplication(payload) {
-  const response = await fetch(`${API_BASE_URL}/applications`, {
+  const response = await apiFetch("/applications", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -24,7 +40,7 @@ async function saveApplication(payload) {
 }
 
 async function deleteApplication(applicationId) {
-  const response = await fetch(`${API_BASE_URL}/applications/${applicationId}`, {
+  const response = await apiFetch(`/applications/${applicationId}`, {
     method: "DELETE",
   });
 

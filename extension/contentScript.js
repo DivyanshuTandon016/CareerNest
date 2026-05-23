@@ -728,7 +728,7 @@ async function autoSaveConfirmedApplication({ force = false } = {}) {
   } catch {
     const response = {
       ok: false,
-      error: "Start the CareerNest backend before applying.",
+      error: "Check the CareerNest API URL in the extension popup.",
       ...status,
     };
     showNotice({

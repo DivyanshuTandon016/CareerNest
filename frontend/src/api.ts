@@ -1,9 +1,11 @@
 import type { Application, ApplicationPayload, ApplicationStats } from "./types";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000";
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
-).replace(/\/+$/, "");
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const API_BASE_URL = (configuredApiBaseUrl || DEFAULT_API_BASE_URL).replace(
+  /\/+$/,
+  "",
+);
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {

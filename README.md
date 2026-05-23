@@ -10,6 +10,8 @@ CareerNest is a Chrome-extension-first job application history tracker with:
 
 GitHub repository: https://github.com/DivyanshuTandon016/CareerNest
 
+GitHub Pages dashboard: https://divyanshutandon016.github.io/CareerNest/
+
 Local dashboard: http://localhost:5173
 
 ## Project structure
@@ -81,22 +83,39 @@ The dashboard is pinned to port `5173` and calls `http://localhost:8000` by defa
 VITE_API_BASE_URL=http://localhost:8000
 ```
 
-If you deploy the frontend with GitHub Pages, the browser still needs a reachable API. Use `VITE_API_BASE_URL` during the frontend build to point to the deployed backend, or keep the backend running locally at `http://localhost:8000` for local testing. The backend allows `https://divyanshutandon016.github.io` by default, and you can add more frontend origins with `CAREERNEST_FRONTEND_ORIGINS`.
+If you deploy the frontend with GitHub Pages, the browser still needs a reachable API. GitHub Pages only serves static files, so it cannot run FastAPI or SQLite by itself.
+
+## Publishing
+
+The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml` that builds `frontend/` and publishes the dashboard to GitHub Pages.
+
+1. Host the backend somewhere that can run Python, such as Render, Railway, Fly.io, or another API host.
+2. Set a GitHub repository variable named `VITE_API_BASE_URL` to that backend URL, for example `https://careernest-api.onrender.com`.
+3. In GitHub, set **Settings > Pages > Build and deployment > Source** to **GitHub Actions**.
+4. Push to `main` or run the **Deploy dashboard to GitHub Pages** workflow manually.
+
+The included `render.yaml` is a Render blueprint for the FastAPI backend plus a PostgreSQL database. After the backend is live, use that backend URL for both:
+
+- GitHub repository variable `VITE_API_BASE_URL`
+- Chrome extension popup field **API URL**
+
+The backend allows `https://divyanshutandon016.github.io` by default, and you can add more frontend origins with `CAREERNEST_FRONTEND_ORIGINS`.
 
 ## Chrome extension
 
-1. Start the backend on port `8000`.
-2. Open Chrome and visit `chrome://extensions`.
-3. Enable **Developer mode**.
-4. Choose **Load unpacked** and select the `extension` folder.
-5. Apply on a job page. When the extension sees a clear submission confirmation, it saves the job and shows an Undo notice.
-6. Refresh the dashboard and confirm the saved job appears in the history with its applied date.
+1. Open Chrome and visit `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked** and select the `extension` folder.
+4. Open the CareerNest extension popup.
+5. Set **API URL** to your hosted backend URL. For local development, keep `http://localhost:8000`.
+6. Apply on a job page. When the extension sees a clear submission confirmation, it saves the job and shows an Undo notice.
+7. Refresh the dashboard and confirm the saved job appears in the history with its applied date.
 
 The extension reads visible job page text and common structured job metadata through a content script, then sends captured details to the local API through its Manifest V3 service worker. It does not submit applications, collect passwords, or read cookies. Automatic tracking depends on readable job details and visible confirmation text such as a submitted or received application message.
 
 ## Automatic tracking test
 
-1. Start the backend on port `8000`.
+1. Start the backend on port `8000`, or configure the extension popup with a hosted backend URL.
 2. Load or reload the unpacked `extension` folder in Chrome.
 3. Apply on a supported job flow and wait for a visible success message such as an application submitted or received confirmation.
 4. Confirm the CareerNest notice appears on the page.

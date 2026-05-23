@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: careernest-api
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: CAREERNEST_FRONTEND_ORIGINS
+        value: https://divyanshutandon016.github.io
+      - key: CAREERNEST_SEED_SAMPLE
+        value: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: careernest-db
+          property: connectionString
+
+databases:
+  - name: careernest-db
