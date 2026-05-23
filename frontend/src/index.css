@@ -38,3 +38,71 @@ textarea {
   }
 }
 
+.tactical-app {
+  background:
+    linear-gradient(rgba(239, 68, 68, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(239, 68, 68, 0.07) 1px, transparent 1px),
+    radial-gradient(circle at top left, rgba(185, 28, 28, 0.24), transparent 34rem),
+    radial-gradient(circle at bottom right, rgba(107, 114, 128, 0.18), transparent 38rem),
+    #050505;
+  background-size:
+    32px 32px,
+    32px 32px,
+    auto,
+    auto;
+}
+
+.tactical-panel {
+  background:
+    linear-gradient(135deg, rgba(24, 24, 27, 0.96), rgba(8, 8, 9, 0.96));
+  border-color: rgba(239, 68, 68, 0.24);
+  box-shadow: 0 24px 80px -40px rgba(0, 0, 0, 0.9);
+}
+
+.tactical-card {
+  background:
+    linear-gradient(135deg, rgba(24, 24, 27, 0.96), rgba(8, 8, 9, 0.96));
+  border-color: rgba(239, 68, 68, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 52px -34px rgba(0, 0, 0, 0.9);
+}
+
+.tactical-input {
+  background: rgba(5, 8, 5, 0.82) !important;
+  border-color: rgba(239, 68, 68, 0.28) !important;
+  color: #e5e7eb !important;
+}
+
+.tactical-input::placeholder {
+  color: #8b947f;
+}
+
+.tactical-app .input {
+  background: rgba(5, 8, 5, 0.86);
+  border-color: rgba(239, 68, 68, 0.28);
+  color: #e5e7eb;
+}
+
+.tactical-app .input:focus {
+  border-color: rgba(248, 113, 113, 0.9);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.16);
+}
+
+.tactical-app [class*="text-lime"],
+.tactical-app [class*="text-emerald"],
+.tactical-app [class*="text-amber"] {
+  color: #fca5a5;
+}
+
+.tactical-app [class*="border-lime"],
+.tactical-app [class*="border-emerald"],
+.tactical-app [class*="border-amber"] {
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.tactical-app [class*="bg-lime"],
+.tactical-app [class*="bg-emerald"],
+.tactical-app [class*="bg-amber"] {
+  background-color: rgba(239, 68, 68, 0.11);
+}
