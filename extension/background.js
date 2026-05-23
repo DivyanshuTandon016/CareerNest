@@ -1,7 +1,9 @@
 const API_BASE_URL = "http://localhost:8000";
 const AUTO_SAVE_WINDOW_MS = 30 * 60 * 1000;
 const DEDUPE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+const RECENT_JOB_DETAILS_WINDOW_MS = 4 * 60 * 60 * 1000;
 const RECENT_INTENTS_KEY = "recentApplyIntents";
+const RECENT_JOB_DETAILS_KEY = "recentJobDetails";
 const AUTO_SAVE_FINGERPRINTS_KEY = "autoSaveFingerprints";
 
 async function saveApplication(payload) {
@@ -43,6 +45,14 @@ function normalizedKey(value) {
 function comparableUrl(value) {
   try {
     const url = new URL(value);
+    const handshakeJobId =
+      url.hostname.includes("joinhandshake.") &&
+      url.pathname.match(/\/(?:job-search|jobs)\/(\d+)/)?.[1];
+
+    if (handshakeJobId) {
+      return `${url.hostname.replace(/^www\./, "")}/jobs/${handshakeJobId}`.toLowerCase();
+    }
+
     return `${url.hostname.replace(/^www\./, "")}${url.pathname}`.toLowerCase();
   } catch {
     return normalizedKey(value);
@@ -57,9 +67,35 @@ function sourceFromUrl(value) {
   }
 }
 
+function keyFromDetails(details) {
+  const source = trimValue(details?.sourceSite) || sourceFromUrl(details?.url);
+  return normalizedKey(source);
+}
+
+function isLikelyJobUrl(value, sourceSite = "") {
+  try {
+    const url = new URL(value);
+    const hostAndPath = `${sourceSite || url.hostname} ${url.hostname} ${url.pathname}`.toLowerCase();
+
+    return /joinhandshake|handshake|myworkdayjobs|workday|greenhouse|lever\.co|linkedin.*jobs|indeed|smartrecruiters|icims|taleo|ashbyhq|workable|jobvite|\/jobs?\b|\/careers?\b|\/apply\b|\/positions?\b/.test(
+      hostAndPath,
+    );
+  } catch {
+    return false;
+  }
+}
+
 function cleanJobUrl(value) {
   try {
     const url = new URL(value);
+    const handshakeJobId =
+      url.hostname.includes("joinhandshake.") &&
+      url.pathname.match(/\/(?:job-search|jobs)\/(\d+)/)?.[1];
+
+    if (handshakeJobId) {
+      url.pathname = `/jobs/${handshakeJobId}`;
+    }
+
     url.hash = "";
     return url.toString();
   } catch {
@@ -115,26 +151,42 @@ function applicationPayload(details) {
 }
 
 function hasRequiredDetails(details) {
+  const title = trimValue(details?.title);
+  const company = trimValue(details?.company);
+
   return Boolean(
-    (trimValue(details?.company) || companyFromUrl(details?.url)) &&
-      trimValue(details?.title) &&
-      trimValue(details?.url),
-  );
+    (company || companyFromUrl(details?.url)) &&
+      title &&
+      trimValue(details?.url) &&
+      isLikelyJobUrl(details?.url, details?.sourceSite),
+  ) && !/^(jobs|search|saved|explore)$/i.test(title) && !/^(explore|jobs)$/i.test(company);
 }
 
-function mergeDetails(currentDetails, recentIntent) {
+function mergeDetails(currentDetails, recentIntent, rememberedDetails = {}) {
   const recentDetails = recentIntent?.details ?? {};
 
   return {
     company:
       trimValue(recentDetails.company) ||
+      trimValue(rememberedDetails.company) ||
       trimValue(currentDetails?.company) ||
-      companyFromUrl(recentDetails.url || currentDetails?.url),
-    title: trimValue(recentDetails.title) || trimValue(currentDetails?.title),
-    location: trimValue(recentDetails.location) || trimValue(currentDetails?.location),
-    url: trimValue(recentDetails.url) || trimValue(currentDetails?.url),
+      companyFromUrl(recentDetails.url || rememberedDetails.url || currentDetails?.url),
+    title:
+      trimValue(recentDetails.title) ||
+      trimValue(rememberedDetails.title) ||
+      trimValue(currentDetails?.title),
+    location:
+      trimValue(recentDetails.location) ||
+      trimValue(rememberedDetails.location) ||
+      trimValue(currentDetails?.location),
+    url:
+      trimValue(recentDetails.url) ||
+      trimValue(rememberedDetails.url) ||
+      trimValue(currentDetails?.url),
     sourceSite:
-      trimValue(recentDetails.sourceSite) || trimValue(currentDetails?.sourceSite),
+      trimValue(recentDetails.sourceSite) ||
+      trimValue(rememberedDetails.sourceSite) ||
+      trimValue(currentDetails?.sourceSite),
   };
 }
 
@@ -143,8 +195,65 @@ async function recentIntents() {
   return stored[RECENT_INTENTS_KEY] ?? {};
 }
 
+async function recentJobDetails() {
+  const stored = await chrome.storage.session.get(RECENT_JOB_DETAILS_KEY);
+  return stored[RECENT_JOB_DETAILS_KEY] ?? {};
+}
+
+async function rememberRecentJobDetails(details) {
+  if (!hasRequiredDetails(details)) {
+    return;
+  }
+
+  const jobs = await recentJobDetails();
+  const key = keyFromDetails(details);
+  const value = {
+    details,
+    recordedAt: Date.now(),
+  };
+
+  if (key) {
+    jobs[key] = value;
+  }
+
+  jobs.latest = value;
+  await chrome.storage.session.set({ [RECENT_JOB_DETAILS_KEY]: jobs });
+}
+
+async function getRecentJobDetails(currentDetails) {
+  const jobs = await recentJobDetails();
+  const now = Date.now();
+
+  for (const [key, value] of Object.entries(jobs)) {
+    if (!value?.recordedAt || now - value.recordedAt > RECENT_JOB_DETAILS_WINDOW_MS) {
+      delete jobs[key];
+    }
+  }
+
+  await chrome.storage.session.set({ [RECENT_JOB_DETAILS_KEY]: jobs });
+
+  const key = keyFromDetails(currentDetails);
+  const matchingJob = key ? jobs[key] : null;
+
+  if (matchingJob?.details) {
+    return matchingJob.details;
+  }
+
+  if (jobs.latest?.details) {
+    return jobs.latest.details;
+  }
+
+  return {};
+}
+
 async function rememberApplyIntent(tabId, details) {
-  if (!tabId || !hasRequiredDetails(details)) {
+  if (!hasRequiredDetails(details)) {
+    return;
+  }
+
+  await rememberRecentJobDetails(details);
+
+  if (!tabId) {
     return;
   }
 
@@ -211,7 +320,8 @@ async function rememberFingerprint(details) {
 
 async function autoSaveApplication(tabId, currentDetails) {
   const recentIntent = await getRecentApplyIntent(tabId);
-  const details = mergeDetails(currentDetails, recentIntent);
+  const rememberedDetails = await getRecentJobDetails(currentDetails);
+  const details = mergeDetails(currentDetails, recentIntent, rememberedDetails);
 
   if (!hasRequiredDetails(details)) {
     return {
@@ -236,6 +346,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === "CAREERNEST_RECORD_APPLY_INTENT") {
     rememberApplyIntent(senderTabId, message.details)
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) =>
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not remember this job.",
+        }),
+      );
+
+    return true;
+  }
+
+  if (message?.type === "CAREERNEST_REMEMBER_JOB_DETAILS") {
+    rememberRecentJobDetails(message.details)
       .then(() => sendResponse({ ok: true }))
       .catch((error) =>
         sendResponse({
