@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from ..database import get_session
-from ..models import Application, ApplicationStatus, utc_now
+from ..models import Application, utc_now
 from ..schemas import (
     ApplicationCreate,
     ApplicationRead,
@@ -24,7 +24,14 @@ def get_application_or_404(application_id: int, session: Session) -> Application
 
 
 def normalized_url(value: str) -> str:
-    return value.rstrip("/")
+    cleaned = value.rstrip("/")
+    if "joinhandshake." in cleaned:
+        parts = cleaned.split("?")[0].split("/")
+        for index, part in enumerate(parts):
+            if part in {"job-search", "jobs"} and index + 1 < len(parts):
+                return "/".join([*parts[:index], "jobs", parts[index + 1]]).rstrip("/")
+
+    return cleaned
 
 
 def matching_application(
@@ -56,25 +63,31 @@ def get_application_stats(session: Session = Depends(get_session)) -> Applicatio
     applications = list(session.exec(select(Application)).all())
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
+    companies = {
+        application.company.casefold()
+        for application in applications
+        if application.company.strip()
+    }
+    source_sites = {
+        application.source_site.casefold()
+        for application in applications
+        if application.source_site
+    }
+    applied_dates = [
+        application.date_applied
+        for application in applications
+        if application.date_applied is not None
+    ]
 
     return ApplicationStats(
         total_applications=len(applications),
-        number_applied=sum(
-            application.status == ApplicationStatus.APPLIED for application in applications
-        ),
-        number_rejected=sum(
-            application.status == ApplicationStatus.REJECTED for application in applications
-        ),
-        number_interviewing=sum(
-            application.status == ApplicationStatus.INTERVIEW for application in applications
-        ),
-        number_offers=sum(
-            application.status == ApplicationStatus.OFFER for application in applications
-        ),
         applications_this_week=sum(
             application.date_applied is not None and application.date_applied >= week_start
             for application in applications
         ),
+        unique_companies=len(companies),
+        source_sites=len(source_sites),
+        latest_application=max(applied_dates) if applied_dates else None,
     )
 
 
