@@ -16,9 +16,9 @@ def sample_applications() -> list[Application]:
             location="Phoenix, AZ",
             job_url="https://jobs.example.com/northstar/software-engineer-intern",
             source_site="jobs.example.com",
-            status=ApplicationStatus.SAVED,
+            status=ApplicationStatus.APPLIED,
             date_applied=today,
-            notes="Saved from a campus job board.",
+            notes="Captured from a campus job board.",
             resume_version="intern-frontend-v2.pdf",
         ),
         Application(
@@ -27,10 +27,10 @@ def sample_applications() -> list[Application]:
             location="Remote",
             job_url="https://careers.example.com/harbor/data-analyst",
             source_site="careers.example.com",
-            status=ApplicationStatus.INTERVIEW,
+            status=ApplicationStatus.APPLIED,
             date_applied=today - timedelta(days=2),
             deadline=today + timedelta(days=5),
-            notes="Recruiter screen scheduled.",
+            notes="Captured from a job board.",
             resume_version="analytics-portfolio.pdf",
         ),
         Application(
@@ -39,9 +39,9 @@ def sample_applications() -> list[Application]:
             location="Tempe, AZ",
             job_url="https://work.example.com/summit/backend-developer",
             source_site="work.example.com",
-            status=ApplicationStatus.REJECTED,
+            status=ApplicationStatus.APPLIED,
             date_applied=today - timedelta(days=10),
-            notes="Keep an eye on future new grad roles.",
+            notes="Captured from a job board.",
             resume_version="backend-v1.pdf",
         ),
         Application(
@@ -50,16 +50,19 @@ def sample_applications() -> list[Application]:
             location="Scottsdale, AZ",
             job_url="https://apply.example.com/juniper/product-engineering-fellow",
             source_site="apply.example.com",
-            status=ApplicationStatus.OFFER,
+            status=ApplicationStatus.APPLIED,
             date_applied=today - timedelta(days=4),
-            notes="Offer response due next week.",
+            notes="Captured from a job board.",
             resume_version="fullstack-v3.pdf",
         ),
     ]
 
 
 def seed_if_empty() -> None:
-    if os.getenv("CAREERNEST_SEED_SAMPLE", "true").lower() in {"0", "false", "no"}:
+    cleanup_legacy_sample_applications()
+    normalize_application_history()
+
+    if os.getenv("CAREERNEST_SEED_SAMPLE", "false").lower() in {"0", "false", "no"}:
         return
 
     with Session(engine) as session:
@@ -71,8 +74,30 @@ def seed_if_empty() -> None:
         session.commit()
 
 
+def cleanup_legacy_sample_applications() -> None:
+    sample_urls = {application.job_url for application in sample_applications()}
+
+    with Session(engine) as session:
+        applications = session.exec(select(Application)).all()
+        for application in applications:
+            if application.job_url in sample_urls:
+                session.delete(application)
+
+        session.commit()
+
+
+def normalize_application_history() -> None:
+    with Session(engine) as session:
+        applications = session.exec(select(Application)).all()
+        for application in applications:
+            if application.status != ApplicationStatus.APPLIED:
+                application.status = ApplicationStatus.APPLIED
+                session.add(application)
+
+        session.commit()
+
+
 if __name__ == "__main__":
     create_db_and_tables()
     seed_if_empty()
     print("CareerNest sample data is ready.")
-
