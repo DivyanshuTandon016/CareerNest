@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +17,20 @@ async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
 
+def configured_origins() -> list[str]:
+    default_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://divyanshutandon016.github.io",
+    ]
+    extra_origins = [
+        origin.strip()
+        for origin in os.getenv("CAREERNEST_FRONTEND_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return [*default_origins, *extra_origins]
+
+
 app = FastAPI(
     title="CareerNest API",
     description="REST API for the CareerNest job application tracker.",
@@ -25,10 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=configured_origins(),
     allow_origin_regex=(
         r"(?:chrome-extension://.*|http://(?:localhost|127\.0\.0\.1):\d+)"
     ),
