@@ -1,10 +1,6 @@
 export const applicationStatuses = [
-  "Saved",
   "Applied",
-  "Online Assessment",
-  "Interview",
-  "Rejected",
-  "Offer",
+  "Saved",
 ] as const;
 
 export type ApplicationStatus = (typeof applicationStatuses)[number];
@@ -40,10 +36,8 @@ export type ApplicationPayload = {
 
 export type ApplicationStats = {
   total_applications: number;
-  number_applied: number;
-  number_rejected: number;
-  number_interviewing: number;
-  number_offers: number;
   applications_this_week: number;
+  unique_companies: number;
+  source_sites: number;
+  latest_application: string | null;
 };
-
