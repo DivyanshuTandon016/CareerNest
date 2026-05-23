@@ -2,11 +2,15 @@
 
 Track every application. Grow your career with clarity.
 
-CareerNest is a full-stack job application tracking MVP with:
+CareerNest is a Chrome-extension-first job application history tracker with:
 
-- A React dashboard for reviewing, filtering, adding, editing, and deleting applications.
+- A React dashboard for reviewing captured application history.
 - A FastAPI REST API backed by SQLite for local development.
-- A Manifest V3 Chrome extension that detects visible job page details and auto-tracks many confirmed submissions.
+- A Manifest V3 Chrome extension that remembers visible job page details and saves the job after a submitted confirmation is detected.
+
+GitHub repository: https://github.com/DivyanshuTandon016/CareerNest
+
+Local dashboard: http://localhost:5173
 
 ## Project structure
 
@@ -57,7 +61,7 @@ Useful endpoints:
 - `DELETE /applications/{id}`
 - `GET /applications/stats/summary`
 
-Sample applications are inserted the first time an empty local database starts. Set `CAREERNEST_SEED_SAMPLE=false` before launching the backend if you want a blank database.
+Sample applications are off by default so the dashboard starts with real captured history only. Set `CAREERNEST_SEED_SAMPLE=true` before launching the backend only if you want demo rows.
 
 For a future PostgreSQL run, set `DATABASE_URL` to a SQLAlchemy-compatible PostgreSQL URL and install the matching database driver.
 
@@ -71,11 +75,13 @@ npm run dev
 
 Open the Vite URL printed in the terminal, usually `http://localhost:5173`.
 
-The dashboard calls `http://localhost:8000` by default. To point it elsewhere, create `frontend/.env.local` with:
+The dashboard is pinned to port `5173` and calls `http://localhost:8000` by default. To point it elsewhere, copy `frontend/.env.example` to `frontend/.env.local` and change:
 
 ```text
 VITE_API_BASE_URL=http://localhost:8000
 ```
+
+If you deploy the frontend with GitHub Pages, the browser still needs a reachable API. Use `VITE_API_BASE_URL` during the frontend build to point to the deployed backend, or keep the backend running locally at `http://localhost:8000` for local testing. The backend allows `https://divyanshutandon016.github.io` by default, and you can add more frontend origins with `CAREERNEST_FRONTEND_ORIGINS`.
 
 ## Chrome extension
 
@@ -83,10 +89,10 @@ VITE_API_BASE_URL=http://localhost:8000
 2. Open Chrome and visit `chrome://extensions`.
 3. Enable **Developer mode**.
 4. Choose **Load unpacked** and select the `extension` folder.
-5. Apply on a job page. When the extension sees a clear submission confirmation, it saves the job with status `Applied` and shows an Undo notice.
+5. Apply on a job page. When the extension sees a clear submission confirmation, it saves the job and shows an Undo notice.
 6. Refresh the dashboard and confirm the saved job appears in the history with its applied date.
 
-The extension reads visible job page text through a content script and sends data to the local API through its Manifest V3 service worker. It does not submit applications, collect passwords, or read cookies. Automatic tracking depends on readable job details and visible confirmation text such as a submitted or received application message.
+The extension reads visible job page text and common structured job metadata through a content script, then sends captured details to the local API through its Manifest V3 service worker. It does not submit applications, collect passwords, or read cookies. Automatic tracking depends on readable job details and visible confirmation text such as a submitted or received application message.
 
 ## Automatic tracking test
 
@@ -94,12 +100,12 @@ The extension reads visible job page text through a content script and sends dat
 2. Load or reload the unpacked `extension` folder in Chrome.
 3. Apply on a supported job flow and wait for a visible success message such as an application submitted or received confirmation.
 4. Confirm the CareerNest notice appears on the page.
-5. Refresh the dashboard and confirm the new row is marked `Applied`.
+5. Refresh the dashboard and confirm the new row appears in the captured jobs table.
 
 ## API example
 
 ```powershell
 Invoke-RestMethod -Method Post http://localhost:8000/applications `
   -ContentType "application/json" `
-  -Body '{"company":"Northstar Labs","role_title":"Software Engineer Intern","location":"Remote","job_url":"https://jobs.example.com/software-engineer-intern","source_site":"jobs.example.com","status":"Saved","date_applied":"2026-05-22","notes":"Saved from a job page."}'
+  -Body '{"company":"Northstar Labs","role_title":"Software Engineer Intern","location":"Remote","job_url":"https://jobs.example.com/software-engineer-intern","source_site":"jobs.example.com","status":"Applied","date_applied":"2026-05-22","notes":"Captured from a job page."}'
 ```
