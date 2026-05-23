@@ -78,6 +78,18 @@ const siteSelectors = {
       "[class*='location']",
     ],
   },
+  clearcompany: {
+    title: [
+      "h1",
+      "h2",
+      ".job-title",
+      "[class*='job-title']",
+      "[class*='title']",
+      "[class*='heading']",
+    ],
+    company: [".company-name", "[class*='company']", "[class*='brand']"],
+    location: [".job-location", "[class*='location']"],
+  },
 };
 
 const confirmationPatterns = [
@@ -86,6 +98,7 @@ const confirmationPatterns = [
   /\bwe (?:have )?(?:received|got) your application\b/i,
   /\byour application (?:has been|was) received\b/i,
   /\bthank you for applying\b/i,
+  /\bthank you for applying\.?\b/i,
   /\bapplication received\b/i,
   /\bapplication sent\b/i,
   /\byou have applied\b/i,
@@ -131,6 +144,9 @@ function visibleTextFrom(selectors) {
 function selectorsForCurrentSite() {
   const hostname = window.location.hostname.toLowerCase();
 
+  if (hostname.includes("clearcompany.")) {
+    return siteSelectors.clearcompany;
+  }
   if (hostname.includes("linkedin.")) {
     return siteSelectors.linkedin;
   }
@@ -167,18 +183,76 @@ function cleanJobUrl(value) {
   }
 }
 
+function readableFromSlug(value) {
+  return value
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function titleFromPage() {
+  const candidates = [
+    document.title,
+    document.querySelector("h1")?.innerText,
+    document.querySelector("h2")?.innerText,
+  ].map(normalizeText);
+
+  for (const candidate of candidates) {
+    const cleaned = candidate
+      .replace(/\s*\|\s*.*$/i, "")
+      .replace(/^Apply for a job at\s+/i, "")
+      .trim();
+
+    if (cleaned.length > 5 && !/^login$/i.test(cleaned)) {
+      return cleaned;
+    }
+  }
+
+  try {
+    const url = new URL(window.location.href);
+    const jobSegment = url.pathname.split("/jobs/")[1]?.split("/")[1];
+    if (jobSegment) {
+      return readableFromSlug(jobSegment);
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
+function companyFromHostname(hostname) {
+  const hostParts = hostname.replace(/^www\./, "").split(".");
+  const ignoredSubdomains = new Set(["apply", "jobs", "careers", "boards"]);
+  const candidate = hostParts.find((part) => part && !ignoredSubdomains.has(part));
+
+  if (!candidate) {
+    return "";
+  }
+
+  return candidate
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function detectJobDetails() {
   const selectors = selectorsForCurrentSite();
   const generic = siteSelectors.generic;
+  const sourceSite = window.location.hostname.replace(/^www\./, "");
 
   return {
-    title: visibleTextFrom([...selectors.title, ...generic.title]),
-    company: visibleTextFrom([...selectors.company, ...generic.company]),
+    title: visibleTextFrom([...selectors.title, ...generic.title]) || titleFromPage(),
+    company:
+      visibleTextFrom([...selectors.company, ...generic.company]) ||
+      companyFromHostname(sourceSite),
     location: cleanerLocation(
       visibleTextFrom([...selectors.location, ...generic.location]),
     ),
     url: cleanJobUrl(window.location.href),
-    sourceSite: window.location.hostname.replace(/^www\./, ""),
+    sourceSite,
   };
 }
 
@@ -245,7 +319,22 @@ function visiblePageText() {
 
 function hasSubmissionConfirmation() {
   const text = visiblePageText();
-  return confirmationPatterns.some((pattern) => pattern.test(text));
+  const url = window.location.href.toLowerCase();
+
+  return (
+    confirmationPatterns.some((pattern) => pattern.test(text)) ||
+    (url.includes("clearcompany.com") && url.includes("/apply/"))
+  );
+}
+
+function pageStatus() {
+  const details = detectJobDetails();
+
+  return {
+    details,
+    hasConfirmation: hasSubmissionConfirmation(),
+    canAutoSave: hasJobDetails(details) && hasSubmissionConfirmation(),
+  };
 }
 
 function styleNoticeHost(host) {
@@ -370,9 +459,20 @@ function showNotice({ tone = "success", message, applicationId = null }) {
   document.documentElement.append(host);
 }
 
-async function autoSaveConfirmedApplication() {
-  if (autoSaveAttempted || !hasSubmissionConfirmation()) {
-    return;
+async function autoSaveConfirmedApplication({ force = false } = {}) {
+  const status = pageStatus();
+
+  if (!force && autoSaveAttempted) {
+    return { ok: false, skipped: true, reason: "Already checked this page.", ...status };
+  }
+
+  if (!status.hasConfirmation) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "No application confirmation found on this page.",
+      ...status,
+    };
   }
 
   autoSaveAttempted = true;
@@ -380,12 +480,12 @@ async function autoSaveConfirmedApplication() {
   try {
     const response = await chrome.runtime.sendMessage({
       type: "CAREERNEST_AUTO_SAVE_APPLIED",
-      details: detectJobDetails(),
+      details: status.details,
     });
 
     if (response?.duplicate) {
       showNotice({ message: "This application was already saved." });
-      return;
+      return { ...response, ...status };
     }
 
     if (!response?.ok) {
@@ -393,18 +493,25 @@ async function autoSaveConfirmedApplication() {
         tone: "error",
         message: response?.error || "CareerNest could not read this job page.",
       });
-      return;
+      return { ...response, ...status };
     }
 
     showNotice({
       applicationId: response.application.id,
       message: "Application saved with status Applied.",
     });
+    return { ...response, ...status };
   } catch {
+    const response = {
+      ok: false,
+      error: "Start the CareerNest backend before applying.",
+      ...status,
+    };
     showNotice({
       tone: "error",
-      message: "Start the CareerNest backend before applying.",
+      message: response.error,
     });
+    return response;
   }
 }
 
@@ -418,6 +525,15 @@ function scheduleConfirmationScan() {
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "CAREERNEST_DETECT_JOB") {
     sendResponse(detectJobDetails());
+  }
+
+  if (message?.type === "CAREERNEST_PAGE_STATUS") {
+    sendResponse(pageStatus());
+  }
+
+  if (message?.type === "CAREERNEST_CHECK_PAGE_NOW") {
+    autoSaveConfirmedApplication({ force: true }).then(sendResponse);
+    return true;
   }
 });
 

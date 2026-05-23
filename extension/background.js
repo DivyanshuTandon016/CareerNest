@@ -67,6 +67,26 @@ function cleanJobUrl(value) {
   }
 }
 
+function companyFromUrl(value) {
+  try {
+    const hostParts = new URL(value).hostname.replace(/^www\./, "").split(".");
+    const ignoredSubdomains = new Set(["apply", "jobs", "careers", "boards"]);
+    const candidate = hostParts.find((part) => part && !ignoredSubdomains.has(part));
+
+    if (!candidate) {
+      return "";
+    }
+
+    return candidate
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  } catch {
+    return "";
+  }
+}
+
 function fingerprintFor(details) {
   return [
     normalizedKey(details.company),
@@ -83,7 +103,7 @@ function localDateValue() {
 
 function applicationPayload(details) {
   return {
-    company: trimValue(details.company),
+    company: trimValue(details.company) || companyFromUrl(details.url),
     role_title: trimValue(details.title),
     location: trimValue(details.location) || null,
     job_url: cleanJobUrl(details.url),
@@ -96,7 +116,9 @@ function applicationPayload(details) {
 
 function hasRequiredDetails(details) {
   return Boolean(
-    trimValue(details?.company) && trimValue(details?.title) && trimValue(details?.url),
+    (trimValue(details?.company) || companyFromUrl(details?.url)) &&
+      trimValue(details?.title) &&
+      trimValue(details?.url),
   );
 }
 
@@ -104,7 +126,10 @@ function mergeDetails(currentDetails, recentIntent) {
   const recentDetails = recentIntent?.details ?? {};
 
   return {
-    company: trimValue(recentDetails.company) || trimValue(currentDetails?.company),
+    company:
+      trimValue(recentDetails.company) ||
+      trimValue(currentDetails?.company) ||
+      companyFromUrl(recentDetails.url || currentDetails?.url),
     title: trimValue(recentDetails.title) || trimValue(currentDetails?.title),
     location: trimValue(recentDetails.location) || trimValue(currentDetails?.location),
     url: trimValue(recentDetails.url) || trimValue(currentDetails?.url),
