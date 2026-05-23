@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Software Engineer Intern | CareerNest Test Company</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "JobPosting",
+        "title": "Software Engineer Intern",
+        "hiringOrganization": {
+          "@type": "Organization",
+          "name": "CareerNest Test Company"
+        },
+        "jobLocation": {
+          "@type": "Place",
+          "address": {
+            "@type": "PostalAddress",
+            "addressLocality": "Phoenix",
+            "addressRegion": "AZ",
+            "addressCountry": "US"
+          }
+        }
+      }
+    </script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #f4f7f6;
+        color: #18181b;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        padding: 48px;
+      }
+
+      main {
+        background: #fff;
+        border: 1px solid #d4d4d8;
+        border-radius: 8px;
+        box-shadow: 0 18px 42px rgb(24 24 27 / 0.08);
+        display: grid;
+        gap: 18px;
+        margin: 0 auto;
+        max-width: 760px;
+        padding: 32px;
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      .company {
+        color: #047857;
+        font-weight: 700;
+      }
+
+      .location {
+        color: #52525b;
+      }
+
+      button {
+        background: #18181b;
+        border: 0;
+        border-radius: 7px;
+        color: white;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+        min-height: 44px;
+        padding: 10px 16px;
+        width: fit-content;
+      }
+
+      .confirmation {
+        background: #ecfdf5;
+        border: 1px solid #a7f3d0;
+        border-radius: 7px;
+        color: #065f46;
+        display: none;
+        font-weight: 700;
+        padding: 14px;
+      }
+
+      .confirmation[data-visible="true"] {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="company">CareerNest Test Company</p>
+      <h1>Software Engineer Intern</h1>
+      <p class="location">Phoenix, AZ</p>
+      <p>
+        This local page lets you verify the Chrome extension capture flow without
+        applying to a real job.
+      </p>
+      <button type="button" id="apply-button">Apply now</button>
+      <p class="confirmation" id="confirmation">
+        Thank you for applying. Your application has been submitted.
+      </p>
+    </main>
+    <script>
+      document.querySelector("#apply-button").addEventListener("click", () => {
+        document.querySelector("#confirmation").dataset.visible = "true";
+      });
+    </script>
+  </body>
+</html>
