@@ -52,6 +52,11 @@ const siteSelectors = {
       ".jobsearch-JobInfoHeader-subtitle div",
     ],
   },
+  handshake: {
+    title: ["h1", "[data-testid*='job-title']", "[class*='job-title']"],
+    company: ["[data-testid*='company']", "[class*='employer']", "[class*='company']"],
+    location: ["[data-testid*='location']", "[class*='location']"],
+  },
   generic: {
     title: [
       "[data-testid*='job-title']",
@@ -95,10 +100,12 @@ const siteSelectors = {
 const confirmationPatterns = [
   /\byour application (?:has been|was) (?:successfully )?(?:submitted|sent)\b/i,
   /\bapplication (?:has been|was) (?:successfully )?submitted\b/i,
+  /\bapplication submitted\b/i,
   /\bwe (?:have )?(?:received|got) your application\b/i,
   /\byour application (?:has been|was) received\b/i,
   /\bthank you for applying\b/i,
   /\bthank you for applying\.?\b/i,
+  /\bapplied on [a-z]+ \d{1,2}, \d{4}\b/i,
   /\bapplication received\b/i,
   /\bapplication sent\b/i,
   /\byou have applied\b/i,
@@ -162,6 +169,9 @@ function selectorsForCurrentSite() {
   if (hostname.includes("indeed.")) {
     return siteSelectors.indeed;
   }
+  if (hostname.includes("joinhandshake.") || hostname.includes("handshake.")) {
+    return siteSelectors.handshake;
+  }
 
   return siteSelectors.generic;
 }
@@ -170,7 +180,79 @@ function cleanerLocation(value) {
   return normalizeText(value)
     .replace(/\b(?:posted|reposted)\b.*$/i, "")
     .replace(/\s*(?:\u00b7|\|)\s*.*$/i, "")
+    .replace(/^onsite,\s*based in\s*/i, "")
+    .replace(/^hybrid,\s*based in\s*/i, "")
+    .replace(/^remote,\s*based in\s*/i, "")
     .trim();
+}
+
+function visibleLines() {
+  return (document.body?.innerText || "")
+    .split(/\n+/)
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
+function metaContent(selector) {
+  return normalizeText(document.querySelector(selector)?.getAttribute("content"));
+}
+
+function textFromAddress(address) {
+  if (!address) {
+    return "";
+  }
+
+  if (typeof address === "string") {
+    return address;
+  }
+
+  return normalizeText(
+    [
+      address.addressLocality,
+      address.addressRegion,
+      address.addressCountry,
+      address.streetAddress,
+    ]
+      .filter(Boolean)
+      .join(", "),
+  );
+}
+
+function structuredJobPosting() {
+  const scripts = document.querySelectorAll(
+    "script[type='application/ld+json'], script[type='application/json']",
+  );
+
+  for (const script of scripts) {
+    try {
+      const parsed = JSON.parse(script.textContent || "{}");
+      const entries = Array.isArray(parsed) ? parsed : [parsed, ...(parsed["@graph"] || [])];
+
+      for (const entry of entries) {
+        const type = Array.isArray(entry?.["@type"])
+          ? entry["@type"].join(" ")
+          : entry?.["@type"];
+
+        if (!/JobPosting/i.test(type || "")) {
+          continue;
+        }
+
+        const locationEntry = Array.isArray(entry.jobLocation)
+          ? entry.jobLocation[0]
+          : entry.jobLocation;
+
+        return {
+          title: normalizeText(entry.title),
+          company: normalizeText(entry.hiringOrganization?.name || entry.organization?.name),
+          location: textFromAddress(locationEntry?.address || locationEntry),
+        };
+      }
+    } catch {
+      // Some sites ship non-standard JSON in script tags; selectors still handle those pages.
+    }
+  }
+
+  return {};
 }
 
 function cleanJobUrl(value) {
@@ -238,18 +320,106 @@ function companyFromHostname(hostname) {
     .join(" ");
 }
 
+function isHandshakePage() {
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname.includes("joinhandshake.") || hostname.includes("handshake.");
+}
+
+function isHandshakeNoiseLine(line) {
+  return (
+    /^(jobs|search|saved|save|share|apply|filters?|sort by|at a glance|summary|beta)$/i.test(
+      line,
+    ) ||
+    /^(explore|for you|career center|employers|events|messages|profile)$/i.test(line) ||
+    /\b(movies|music|gaming|consulting|technology|financial services|health care|non-profit|education)\b/i.test(
+      line,
+    ) ||
+    /^(posted|apply by|applied on|application submitted|withdraw application)/i.test(line) ||
+    /\b(job|jobs) found\b/i.test(line) ||
+    /^\$/.test(line) ||
+    /^\d+\/\d+$/.test(line) ||
+    /^[A-Z][a-z]+ \d{1,2}, \d{4}$/.test(line)
+  );
+}
+
+function isGenericHandshakeHeading(line) {
+  return /^(jobs|search|saved|explore)$/i.test(line);
+}
+
+function isLikelyLocationLine(line) {
+  return (
+    /^(remote|hybrid|onsite)(?:\b|,)/i.test(line) ||
+    (/^[A-Za-z .'-]+,\s*[A-Z]{2}(?:\b| ·)/.test(line) &&
+      line.length < 60 &&
+      !/\b(internship|engineer|analyst|developer|sales|program|representative|manager|obsessed)\b/i.test(
+        line,
+      ))
+  );
+}
+
+function handshakeDetailsFromText() {
+  if (!isHandshakePage()) {
+    return {};
+  }
+
+  const lines = visibleLines();
+  const heading = normalizeText(document.querySelector("h1")?.innerText);
+  const title =
+    (heading && !isGenericHandshakeHeading(heading) ? heading : "") ||
+    lines.find((line, index) => /^posted\b/i.test(lines[index + 1] || "")) ||
+    lines.find((line, index) => /^applied on\b/i.test(lines[index + 1] || "")) ||
+    "";
+  const titleIndex = lines.findIndex((line) => line === title);
+  const beforeTitle =
+    titleIndex > 0 ? lines.slice(Math.max(0, titleIndex - 8), titleIndex) : [];
+  const company =
+    [...beforeTitle]
+      .reverse()
+      .find((line) => !isHandshakeNoiseLine(line) && !line.includes(" - ")) || "";
+  const locationLine =
+    lines.find((line) => /\bbased in\b/i.test(line)) ||
+    lines.find(isLikelyLocationLine) ||
+    "";
+
+  return {
+    title,
+    company,
+    location: cleanerLocation(locationLine),
+  };
+}
+
 function detectJobDetails() {
   const selectors = selectorsForCurrentSite();
   const generic = siteSelectors.generic;
   const sourceSite = window.location.hostname.replace(/^www\./, "");
+  const handshake = handshakeDetailsFromText();
+  const structured = structuredJobPosting();
+  const metaTitle =
+    metaContent("meta[property='og:title']") ||
+    metaContent("meta[name='twitter:title']");
+  const metaCompany =
+    metaContent("meta[name='company']") ||
+    metaContent("meta[property='og:site_name']");
+  const metaLocation = metaContent("meta[name='job-location']");
 
   return {
-    title: visibleTextFrom([...selectors.title, ...generic.title]) || titleFromPage(),
+    title:
+      handshake.title ||
+      structured.title ||
+      visibleTextFrom([...selectors.title, ...generic.title]) ||
+      metaTitle ||
+      titleFromPage(),
     company:
+      handshake.company ||
+      structured.company ||
       visibleTextFrom([...selectors.company, ...generic.company]) ||
+      metaCompany ||
       companyFromHostname(sourceSite),
     location: cleanerLocation(
-      visibleTextFrom([...selectors.location, ...generic.location]),
+      handshake.location ||
+        structured.location ||
+        visibleTextFrom([...selectors.location, ...generic.location]) ||
+        metaLocation,
     ),
     url: cleanJobUrl(window.location.href),
     sourceSite,
@@ -274,10 +444,64 @@ function hasJobDetails(details) {
   return Boolean(details.title && details.company && details.url);
 }
 
+function isLikelyJobUrl(value) {
+  try {
+    const url = new URL(value);
+    const hostAndPath = `${url.hostname} ${url.pathname}`.toLowerCase();
+
+    return /joinhandshake|handshake|myworkdayjobs|workday|greenhouse|lever\.co|linkedin.*jobs|indeed|smartrecruiters|icims|taleo|ashbyhq|workable|jobvite|\/jobs?\b|\/careers?\b|\/apply\b|\/positions?\b/.test(
+      hostAndPath,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasVisibleJobContext() {
+  const text = visiblePageText();
+  return /\b(job description|at a glance|job details|responsibilities|qualifications|salary|compensation|internship|full-time|part-time|apply by|applied on)\b/i.test(
+    text,
+  );
+}
+
+function isLikelyJobPage(details) {
+  return hasJobDetails(details) && (isLikelyJobUrl(details.url) || hasVisibleJobContext());
+}
+
+let lastRememberedDetailsKey = "";
+
+function detailsKey(details) {
+  return [details.title, details.company, details.url].map(normalizeText).join("|");
+}
+
+async function rememberDetectedJobDetails() {
+  const details = detectJobDetails();
+
+  if (!isLikelyJobPage(details)) {
+    return;
+  }
+
+  const key = detailsKey(details);
+  if (key === lastRememberedDetailsKey) {
+    return;
+  }
+
+  lastRememberedDetailsKey = key;
+
+  try {
+    await chrome.runtime.sendMessage({
+      type: "CAREERNEST_REMEMBER_JOB_DETAILS",
+      details,
+    });
+  } catch {
+    // Saving still works when a confirmation page has enough details by itself.
+  }
+}
+
 async function rememberApplyIntent() {
   const details = detectJobDetails();
 
-  if (!hasJobDetails(details)) {
+  if (!isLikelyJobPage(details)) {
     return;
   }
 
@@ -333,7 +557,7 @@ function pageStatus() {
   return {
     details,
     hasConfirmation: hasSubmissionConfirmation(),
-    canAutoSave: hasJobDetails(details) && hasSubmissionConfirmation(),
+    canAutoSave: isLikelyJobPage(details) && hasSubmissionConfirmation(),
   };
 }
 
@@ -498,7 +722,7 @@ async function autoSaveConfirmedApplication({ force = false } = {}) {
 
     showNotice({
       applicationId: response.application.id,
-      message: "Application saved with status Applied.",
+      message: "Application saved to your history.",
     });
     return { ...response, ...status };
   } catch {
@@ -541,7 +765,7 @@ document.addEventListener("click", trackApplyClick, true);
 document.addEventListener("submit", () => void rememberApplyIntent(), true);
 
 if (hasJobDetails(detectJobDetails())) {
-  void rememberApplyIntent();
+  void rememberDetectedJobDetails();
 }
 
 const confirmationObserver = new MutationObserver(scheduleConfirmationScan);
@@ -551,3 +775,5 @@ confirmationObserver.observe(document.documentElement, {
 });
 
 window.setTimeout(scheduleConfirmationScan, 1200);
+window.setTimeout(() => void rememberDetectedJobDetails(), 1200);
+window.setInterval(() => void rememberDetectedJobDetails(), 4000);
