@@ -10,12 +10,8 @@ def utc_now() -> datetime:
 
 
 class ApplicationStatus(str, Enum):
-    SAVED = "Saved"
     APPLIED = "Applied"
-    ONLINE_ASSESSMENT = "Online Assessment"
-    INTERVIEW = "Interview"
-    REJECTED = "Rejected"
-    OFFER = "Offer"
+    SAVED = "Saved"
 
 
 class Application(SQLModel, table=True):
@@ -32,4 +28,3 @@ class Application(SQLModel, table=True):
     resume_version: Optional[str] = Field(default=None, max_length=200)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
-
