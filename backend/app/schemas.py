@@ -13,7 +13,7 @@ class ApplicationBase(SQLModel):
     location: Optional[str] = None
     job_url: str
     source_site: Optional[str] = None
-    status: ApplicationStatus = ApplicationStatus.SAVED
+    status: ApplicationStatus = ApplicationStatus.APPLIED
     date_applied: Optional[date] = None
     deadline: Optional[date] = None
     notes: Optional[str] = None
@@ -47,9 +47,7 @@ class ApplicationRead(ApplicationBase):
 
 class ApplicationStats(SQLModel):
     total_applications: int
-    number_applied: int
-    number_rejected: int
-    number_interviewing: int
-    number_offers: int
     applications_this_week: int
-
+    unique_companies: int
+    source_sites: int
+    latest_application: Optional[date] = None
